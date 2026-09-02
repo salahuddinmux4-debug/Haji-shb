@@ -39,6 +39,8 @@ class MujahidRepository(private val context: Context) {
     private val adminDao = database.adminDao()
     private val transactionDao = database.transactionDao()
 
+    private val prefs = context.getSharedPreferences("mujahid_repo_prefs", Context.MODE_PRIVATE)
+
     init {
         CoroutineScope(Dispatchers.IO).launch {
             seedInitialDataIfNeeded()
@@ -116,81 +118,39 @@ class MujahidRepository(private val context: Context) {
             rateHistoryDao.insertHistoryList(listOf(history1, history2).map { RateHistoryEntity.fromDomain(it) })
         }
 
-        // Seed Sample Customer if empty for instant testing
-        if (customerDao.getCustomerCount() == 0) {
-            val demoCustomer1 = Customer(
-                id = "cust_demo_1",
-                name = "Tariq Mahmood",
-                username = "tariq",
-                passwordHash = SecurityUtils.hashPassword("tariq123"),
-                phone = "0300-1234567",
-                balance = 45000.0,
-                balanceType = BalanceType.RECEIVABLE,
-                isActive = true,
-                hasCustomRates = false
-            )
-            val demoCustomer2 = Customer(
-                id = "cust_demo_2",
-                name = "Ali Hassan",
-                username = "ali",
-                passwordHash = SecurityUtils.hashPassword("ali123"),
-                phone = "0321-9876543",
-                balance = 28500.0,
-                balanceType = BalanceType.PAYABLE,
-                isActive = true,
-                hasCustomRates = true,
-                customRatesMap = mapOf("item_1" to 290.0, "item_2" to 295.0)
-            )
-            customerDao.insertCustomer(CustomerEntity.fromDomain(demoCustomer1))
-            customerDao.insertCustomer(CustomerEntity.fromDomain(demoCustomer2))
-        }
+        // Check if demo/sample data was already seeded once. If yes, NEVER re-seed sample items or demo transactions when user deletes them.
+        val hasSeededDemo = prefs.getBoolean("has_seeded_demo_data_v2", false)
+        if (!hasSeededDemo) {
+            prefs.edit().putBoolean("has_seeded_demo_data_v2", true).apply()
 
-        // Seed Sample Transactions if empty
-        if (transactionDao.getTransactionCount() == 0) {
-            val now = System.currentTimeMillis()
-            val sampleTx1 = TransactionEntity(
-                id = "tx_seed_1",
-                customerId = "cust_demo_1",
-                customerName = "Tariq Mahmood",
-                type = TransactionType.BILL.name,
-                itemId = "item_1",
-                itemName = "Item 1 (Cotton)",
-                quantity = 50.0,
-                unit = "Bags (بورے)",
-                rate = 295.0,
-                amount = 14750.0,
-                paymentMethod = "Credit",
-                billNumber = "BILL-1001",
-                date = FormatUtils.formatDateOnly(now - 172800000L),
-                timestamp = now - 172800000L,
-                notes = "50 Bags Maal Purchase from customer",
-                balanceBefore = 30250.0,
-                balanceAfter = 45000.0,
-                balanceTypeAfter = BalanceType.RECEIVABLE.name,
-                recordedBy = "Admin"
-            )
-            val sampleTx2 = TransactionEntity(
-                id = "tx_seed_2",
-                customerId = "cust_demo_2",
-                customerName = "Ali Hassan",
-                type = TransactionType.PAYMENT.name,
-                itemId = null,
-                itemName = "",
-                quantity = 0.0,
-                unit = "",
-                rate = 0.0,
-                amount = 15000.0,
-                paymentMethod = "Cash",
-                billNumber = "",
-                date = FormatUtils.formatDateOnly(now - 86400000L),
-                timestamp = now - 86400000L,
-                notes = "Cash Adaigi / payment given to Ali Hassan",
-                balanceBefore = 13500.0,
-                balanceAfter = 28500.0,
-                balanceTypeAfter = BalanceType.PAYABLE.name,
-                recordedBy = "Admin"
-            )
-            transactionDao.insertTransactions(listOf(sampleTx1, sampleTx2))
+            // Seed Initial Demo Customers on first install only
+            if (customerDao.getCustomerCount() == 0) {
+                val demoCustomer1 = Customer(
+                    id = "cust_demo_1",
+                    name = "Tariq Mahmood",
+                    username = "tariq",
+                    passwordHash = SecurityUtils.hashPassword("tariq123"),
+                    phone = "0300-1234567",
+                    balance = 45000.0,
+                    balanceType = BalanceType.RECEIVABLE,
+                    isActive = true,
+                    hasCustomRates = false
+                )
+                val demoCustomer2 = Customer(
+                    id = "cust_demo_2",
+                    name = "Ali Hassan",
+                    username = "ali",
+                    passwordHash = SecurityUtils.hashPassword("ali123"),
+                    phone = "0321-9876543",
+                    balance = 28500.0,
+                    balanceType = BalanceType.PAYABLE,
+                    isActive = true,
+                    hasCustomRates = true,
+                    customRatesMap = mapOf("item_1" to 290.0, "item_2" to 295.0)
+                )
+                customerDao.insertCustomer(CustomerEntity.fromDomain(demoCustomer1))
+                customerDao.insertCustomer(CustomerEntity.fromDomain(demoCustomer2))
+            }
         }
     }
 
