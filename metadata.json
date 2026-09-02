@@ -1,0 +1,6 @@
+{
+  "name": "Mujahid Accounts",
+  "description": "Professional Customer Balance & Daily Market Rate App with real-time multi-account management",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
