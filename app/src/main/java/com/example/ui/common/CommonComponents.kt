@@ -18,8 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.BalanceType
@@ -36,36 +38,53 @@ fun BalanceBadge(
     val bgColor = if (isReceivable) ReceivableRedBg else PayableGreenBg
     val textColor = if (isReceivable) ReceivableRed else PayableGreen
     val borderColor = if (isReceivable) ReceivableRedBorder else PayableGreenBorder
-    val text = if (isReceivable) "لینا ہے (GET)" else "دینا ہے (GIVE)"
+    val urduText = if (isReceivable) "لینا ہے" else "دینا ہے"
+    val englishText = if (isReceivable) "(GET)" else "(GIVE)"
     val icon = if (isReceivable) Icons.Default.CallReceived else Icons.Default.CallMade
 
     Surface(
         modifier = modifier
+            .wrapContentSize()
             .clip(RoundedCornerShape(if (isLarge) 12.dp else 8.dp))
             .border(1.dp, borderColor, RoundedCornerShape(if (isLarge) 12.dp else 8.dp))
             .testTag("balance_type_badge"),
         color = bgColor
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = if (isLarge) 14.dp else 8.dp,
-                vertical = if (isLarge) 8.dp else 4.dp
-            ),
+            modifier = Modifier
+                .wrapContentSize()
+                .padding(
+                    horizontal = if (isLarge) 12.dp else 8.dp,
+                    vertical = if (isLarge) 6.dp else 4.dp
+                ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = text,
+                contentDescription = null,
                 tint = textColor,
-                modifier = Modifier.size(if (isLarge) 18.dp else 14.dp)
+                modifier = Modifier.size(if (isLarge) 16.dp else 13.dp)
             )
+            // Urdu text strictly horizontal, no vertical wrapping
             Text(
-                text = text,
+                text = urduText,
                 color = textColor,
                 fontSize = if (isLarge) 13.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(textDirection = TextDirection.Rtl)
+            )
+            // English tag strictly horizontal, no vertical wrapping
+            Text(
+                text = englishText,
+                color = textColor,
+                fontSize = if (isLarge) 12.sp else 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(textDirection = TextDirection.Ltr)
             )
         }
     }
@@ -77,42 +96,59 @@ fun CustomerBalanceBadge(
     modifier: Modifier = Modifier,
     isLarge: Boolean = false
 ) {
-    // When Admin has RECEIVABLE (shop to get), Customer has to PAY/GIVE (دینا ہے) -> Red warning badge
-    // When Admin has PAYABLE (shop to give), Customer will RECEIVE/GET (لینا ہے) -> Green asset badge
+    // When Admin has RECEIVABLE (shop to get), Customer has to PAY/GIVE (دینا ہے) -> Red warning badge (TO PAY)
+    // When Admin has PAYABLE (shop to give), Customer will RECEIVE/GET (دینا ہے / لینا ہے) -> Green asset badge (GIVE)
     val customerHasToPay = adminBalanceType == BalanceType.RECEIVABLE
     val bgColor = if (customerHasToPay) ReceivableRedBg else PayableGreenBg
     val textColor = if (customerHasToPay) ReceivableRed else PayableGreen
     val borderColor = if (customerHasToPay) ReceivableRedBorder else PayableGreenBorder
-    val text = if (customerHasToPay) "دینا ہے (TO PAY)" else "لینا ہے (TO RECEIVE)"
+    val urduText = "دینا ہے"
+    val englishText = if (customerHasToPay) "(TO PAY)" else "(GIVE)"
     val icon = if (customerHasToPay) Icons.Default.CallMade else Icons.Default.CallReceived
 
     Surface(
         modifier = modifier
+            .wrapContentSize()
             .clip(RoundedCornerShape(if (isLarge) 12.dp else 8.dp))
             .border(1.dp, borderColor, RoundedCornerShape(if (isLarge) 12.dp else 8.dp))
             .testTag("customer_balance_badge"),
         color = bgColor
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = if (isLarge) 14.dp else 8.dp,
-                vertical = if (isLarge) 8.dp else 4.dp
-            ),
+            modifier = Modifier
+                .wrapContentSize()
+                .padding(
+                    horizontal = if (isLarge) 12.dp else 8.dp,
+                    vertical = if (isLarge) 6.dp else 4.dp
+                ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = text,
+                contentDescription = null,
                 tint = textColor,
-                modifier = Modifier.size(if (isLarge) 18.dp else 14.dp)
+                modifier = Modifier.size(if (isLarge) 16.dp else 13.dp)
             )
+            // Urdu text strictly horizontal, no vertical wrapping
             Text(
-                text = text,
+                text = urduText,
                 color = textColor,
                 fontSize = if (isLarge) 13.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(textDirection = TextDirection.Rtl)
+            )
+            // English tag strictly horizontal, no vertical wrapping
+            Text(
+                text = englishText,
+                color = textColor,
+                fontSize = if (isLarge) 12.sp else 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(textDirection = TextDirection.Ltr)
             )
         }
     }

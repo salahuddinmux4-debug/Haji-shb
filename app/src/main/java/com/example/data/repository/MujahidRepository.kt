@@ -117,41 +117,6 @@ class MujahidRepository(private val context: Context) {
             )
             rateHistoryDao.insertHistoryList(listOf(history1, history2).map { RateHistoryEntity.fromDomain(it) })
         }
-
-        // Check if demo/sample data was already seeded once. If yes, NEVER re-seed sample items or demo transactions when user deletes them.
-        val hasSeededDemo = prefs.getBoolean("has_seeded_demo_data_v2", false)
-        if (!hasSeededDemo) {
-            prefs.edit().putBoolean("has_seeded_demo_data_v2", true).apply()
-
-            // Seed Initial Demo Customers on first install only
-            if (customerDao.getCustomerCount() == 0) {
-                val demoCustomer1 = Customer(
-                    id = "cust_demo_1",
-                    name = "Tariq Mahmood",
-                    username = "tariq",
-                    passwordHash = SecurityUtils.hashPassword("tariq123"),
-                    phone = "0300-1234567",
-                    balance = 45000.0,
-                    balanceType = BalanceType.RECEIVABLE,
-                    isActive = true,
-                    hasCustomRates = false
-                )
-                val demoCustomer2 = Customer(
-                    id = "cust_demo_2",
-                    name = "Ali Hassan",
-                    username = "ali",
-                    passwordHash = SecurityUtils.hashPassword("ali123"),
-                    phone = "0321-9876543",
-                    balance = 28500.0,
-                    balanceType = BalanceType.PAYABLE,
-                    isActive = true,
-                    hasCustomRates = true,
-                    customRatesMap = mapOf("item_1" to 290.0, "item_2" to 295.0)
-                )
-                customerDao.insertCustomer(CustomerEntity.fromDomain(demoCustomer1))
-                customerDao.insertCustomer(CustomerEntity.fromDomain(demoCustomer2))
-            }
-        }
     }
 
     // ==================== AUTHENTICATION ====================
@@ -523,6 +488,8 @@ class MujahidRepository(private val context: Context) {
 
     suspend fun deleteCustomer(customerId: String): Result<Unit> = withContext(Dispatchers.IO) {
         customerDao.deleteCustomerById(customerId)
+        transactionDao.deleteTransactionsByCustomerId(customerId)
+        notificationDao.deleteNotificationsByCustomerId(customerId)
         Result.success(Unit)
     }
 

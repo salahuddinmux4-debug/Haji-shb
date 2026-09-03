@@ -121,6 +121,9 @@ interface NotificationDao {
 
     @Query("DELETE FROM notifications WHERE id = :id")
     suspend fun deleteNotification(id: String)
+
+    @Query("DELETE FROM notifications WHERE customerId = :customerId")
+    suspend fun deleteNotificationsByCustomerId(customerId: String)
 }
 
 @Dao
@@ -163,6 +166,9 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteTransactionById(id: String)
+
+    @Query("DELETE FROM transactions WHERE customerId = :customerId")
+    suspend fun deleteTransactionsByCustomerId(customerId: String)
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun getTransactionCount(): Int

@@ -390,6 +390,7 @@ fun CustomerDashboardView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f, fill = false),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -404,9 +405,13 @@ fun CustomerDashboardView(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp,
-                            color = if (customerHasToPay) ReceivableRed else PayableGreen
+                            color = if (customerHasToPay) ReceivableRed else PayableGreen,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     CustomerBalanceBadge(adminBalanceType = rawBalanceType, isLarge = false)
                 }
@@ -756,15 +761,18 @@ fun CustomerLedgerView(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Current Balance (موجودہ بقایا)", fontSize = 12.sp, color = SlateMuted)
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Text("Current Balance (موجودہ بقایا)", fontSize = 12.sp, color = SlateMuted, maxLines = 1, softWrap = false)
                         Text(
                             text = FormatUtils.formatPkr(customer?.balance ?: 0.0),
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (customerHasToPay) ReceivableRed else PayableGreen
+                            color = if (customerHasToPay) ReceivableRed else PayableGreen,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     CustomerBalanceBadge(adminBalanceType = rawBalType, isLarge = false)
                 }
 
