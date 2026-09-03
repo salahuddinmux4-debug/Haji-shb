@@ -625,9 +625,10 @@ class MujahidRepository(private val context: Context) {
         val currentType = try { BalanceType.valueOf(customerEntity.balanceType) } catch (_: Exception) { BalanceType.RECEIVABLE }
 
         // When admin buys goods (Bill) from customer, admin owes this amount to customer.
-        // In customer terms: Receivable increases (+), Payable decreases.
+        // Balance perspective: Business RECEIVABLE (+) vs PAYABLE (-).
+        // Purchasing goods increases admin's liability (-), reducing customer debt or increasing admin payable.
         val signedCurrent = if (currentType == BalanceType.RECEIVABLE) currentBalance else -currentBalance
-        val signedNew = signedCurrent + totalAmount
+        val signedNew = signedCurrent - totalAmount
         val newBalance = if (signedNew >= 0) signedNew else -signedNew
         val newType = if (signedNew >= 0) BalanceType.RECEIVABLE else BalanceType.PAYABLE
 
@@ -700,9 +701,9 @@ class MujahidRepository(private val context: Context) {
         val currentBalance = customerEntity.balance
         val currentType = try { BalanceType.valueOf(customerEntity.balanceType) } catch (_: Exception) { BalanceType.RECEIVABLE }
 
-        // When admin gives payment to customer, customer's receivable reduces (-) or customer becomes payable.
+        // When admin gives payment to customer, admin's liability decreases (+) or customer owes advance.
         val signedCurrent = if (currentType == BalanceType.RECEIVABLE) currentBalance else -currentBalance
-        val signedNew = signedCurrent - amount
+        val signedNew = signedCurrent + amount
         val newBalance = if (signedNew >= 0) signedNew else -signedNew
         val newType = if (signedNew >= 0) BalanceType.RECEIVABLE else BalanceType.PAYABLE
 
@@ -765,12 +766,12 @@ class MujahidRepository(private val context: Context) {
             val currentType = try { BalanceType.valueOf(customerEntity.balanceType) } catch (_: Exception) { BalanceType.RECEIVABLE }
             val signedCurrent = if (currentType == BalanceType.RECEIVABLE) currentBalance else -currentBalance
 
-            // If it was a BILL (+amount), deleting it means subtract amount.
-            // If it was a PAYMENT (-amount), deleting it means add amount.
+            // If it was a BILL (-amount), deleting it means add amount back.
+            // If it was a PAYMENT (+amount), deleting it means subtract amount back.
             val signedReverted = if (tx.type == TransactionType.BILL.name) {
-                signedCurrent - tx.amount
-            } else {
                 signedCurrent + tx.amount
+            } else {
+                signedCurrent - tx.amount
             }
 
             val newBalance = if (signedReverted >= 0) signedReverted else -signedReverted

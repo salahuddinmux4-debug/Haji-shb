@@ -36,7 +36,7 @@ fun BalanceBadge(
     val bgColor = if (isReceivable) ReceivableRedBg else PayableGreenBg
     val textColor = if (isReceivable) ReceivableRed else PayableGreen
     val borderColor = if (isReceivable) ReceivableRedBorder else PayableGreenBorder
-    val text = if (isReceivable) "GET / RECEIVABLE" else "GIVE / PAYABLE"
+    val text = if (isReceivable) "لینا ہے (GET)" else "دینا ہے (GIVE)"
     val icon = if (isReceivable) Icons.Default.CallReceived else Icons.Default.CallMade
 
     Surface(
@@ -63,7 +63,54 @@ fun BalanceBadge(
             Text(
                 text = text,
                 color = textColor,
-                fontSize = if (isLarge) 14.sp else 11.sp,
+                fontSize = if (isLarge) 13.sp else 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun CustomerBalanceBadge(
+    adminBalanceType: BalanceType,
+    modifier: Modifier = Modifier,
+    isLarge: Boolean = false
+) {
+    // When Admin has RECEIVABLE (shop to get), Customer has to PAY/GIVE (دینا ہے) -> Red warning badge
+    // When Admin has PAYABLE (shop to give), Customer will RECEIVE/GET (لینا ہے) -> Green asset badge
+    val customerHasToPay = adminBalanceType == BalanceType.RECEIVABLE
+    val bgColor = if (customerHasToPay) ReceivableRedBg else PayableGreenBg
+    val textColor = if (customerHasToPay) ReceivableRed else PayableGreen
+    val borderColor = if (customerHasToPay) ReceivableRedBorder else PayableGreenBorder
+    val text = if (customerHasToPay) "دینا ہے (TO PAY)" else "لینا ہے (TO RECEIVE)"
+    val icon = if (customerHasToPay) Icons.Default.CallMade else Icons.Default.CallReceived
+
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(if (isLarge) 12.dp else 8.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(if (isLarge) 12.dp else 8.dp))
+            .testTag("customer_balance_badge"),
+        color = bgColor
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = if (isLarge) 14.dp else 8.dp,
+                vertical = if (isLarge) 8.dp else 4.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = text,
+                tint = textColor,
+                modifier = Modifier.size(if (isLarge) 18.dp else 14.dp)
+            )
+            Text(
+                text = text,
+                color = textColor,
+                fontSize = if (isLarge) 13.sp else 11.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
             )

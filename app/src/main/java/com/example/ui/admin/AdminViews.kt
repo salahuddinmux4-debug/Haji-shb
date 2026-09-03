@@ -677,7 +677,7 @@ fun AdminDashboardView(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (stats.netBalance >= 0) "Net Receivable" else "Net Payable",
+                        text = if (stats.netBalance >= 0) "Net Receivable (خالص وصول طلب)" else "Net Payable (خالص واجب الادا)",
                         fontSize = 11.sp,
                         color = SlateMuted
                     )
@@ -702,7 +702,7 @@ fun AdminDashboardView(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("Total Receivable", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ReceivableRed)
-                        Text("GET", fontSize = 11.sp, fontWeight = FontWeight.Black, color = ReceivableRed)
+                        Text("لینا ہے", fontSize = 11.sp, fontWeight = FontWeight.Black, color = ReceivableRed)
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
@@ -713,7 +713,7 @@ fun AdminDashboardView(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text("From Customers", fontSize = 11.sp, color = ReceivableRed.copy(alpha = 0.8f))
+                    Text("From Customers (گاہکوں سے)", fontSize = 11.sp, color = ReceivableRed.copy(alpha = 0.8f))
                 }
             }
 
@@ -730,7 +730,7 @@ fun AdminDashboardView(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("Total Payable", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PayableGreen)
-                        Text("GIVE", fontSize = 11.sp, fontWeight = FontWeight.Black, color = PayableGreen)
+                        Text("دینا ہے", fontSize = 11.sp, fontWeight = FontWeight.Black, color = PayableGreen)
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
@@ -741,7 +741,7 @@ fun AdminDashboardView(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text("To Customers", fontSize = 11.sp, color = PayableGreen.copy(alpha = 0.8f))
+                    Text("To Customers (گاہکوں کو)", fontSize = 11.sp, color = PayableGreen.copy(alpha = 0.8f))
                 }
             }
         }

@@ -31,6 +31,7 @@ import com.example.model.RateHistoryEntry
 import com.example.model.TransactionRecord
 import com.example.model.TransactionType
 import com.example.ui.common.BalanceBadge
+import com.example.ui.common.CustomerBalanceBadge
 import com.example.ui.common.MarketStatusBanner
 import com.example.ui.common.NetworkStatusBar
 import com.example.ui.common.RateItemCard
@@ -356,13 +357,12 @@ fun CustomerDashboardView(
 
         // ==================== MY BALANCE CARD ====================
         val balance = customer?.balance ?: 0.0
-        val rawBalanceType = customer?.balanceType ?: BalanceType.PAYABLE
+        val rawBalanceType = customer?.balanceType ?: BalanceType.RECEIVABLE
         
         // Perspective Translation:
-        // Admin PAYABLE (دکان نے دینا ہے) -> Customer RECEIVABLE (کسٹمر نے لینا ہے)
-        // Admin RECEIVABLE (دکان نے لینا ہے) -> Customer PAYABLE (کسٹمر نے دینا ہے)
-        val isCustomerReceivable = rawBalanceType == BalanceType.PAYABLE
-        val customerDisplayBalanceType = if (isCustomerReceivable) BalanceType.RECEIVABLE else BalanceType.PAYABLE
+        // Admin RECEIVABLE (گاہک سے لینا ہے) -> Customer has to PAY/GIVE (دکان کو ادا کرنا ہے / دینا ہے) -> RED
+        // Admin PAYABLE (گاہک کو دینا ہے) -> Customer has to RECEIVE/GET (دکان سے وصول کرنا ہے / لینا ہے) -> GREEN
+        val customerHasToPay = rawBalanceType == BalanceType.RECEIVABLE
 
         Card(
             modifier = Modifier
@@ -370,11 +370,11 @@ fun CustomerDashboardView(
                 .testTag("customer_balance_card"),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isCustomerReceivable) ReceivableRedBg else PayableGreenBg
+                containerColor = if (customerHasToPay) ReceivableRedBg else PayableGreenBg
             ),
             border = CardDefaults.outlinedCardBorder().copy(
                 brush = androidx.compose.ui.graphics.SolidColor(
-                    if (isCustomerReceivable) ReceivableRedBorder else PayableGreenBorder
+                    if (customerHasToPay) ReceivableRedBorder else PayableGreenBorder
                 )
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -396,7 +396,7 @@ fun CustomerDashboardView(
                         Icon(
                             imageVector = Icons.Default.AccountBalanceWallet,
                             contentDescription = null,
-                            tint = if (isCustomerReceivable) ReceivableRed else PayableGreen,
+                            tint = if (customerHasToPay) ReceivableRed else PayableGreen,
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
@@ -404,11 +404,11 @@ fun CustomerDashboardView(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp,
-                            color = if (isCustomerReceivable) ReceivableRed else PayableGreen
+                            color = if (customerHasToPay) ReceivableRed else PayableGreen
                         )
                     }
 
-                    BalanceBadge(balanceType = customerDisplayBalanceType, isLarge = false)
+                    CustomerBalanceBadge(adminBalanceType = rawBalanceType, isLarge = false)
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -417,7 +417,7 @@ fun CustomerDashboardView(
                     text = FormatUtils.formatPkr(balance),
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Black,
-                    color = if (isCustomerReceivable) ReceivableRed else PayableGreen,
+                    color = if (customerHasToPay) ReceivableRed else PayableGreen,
                     letterSpacing = (-0.5).sp
                 )
 
@@ -436,19 +436,19 @@ fun CustomerDashboardView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (isCustomerReceivable)
-                                "Amount you will receive from business (لینا ہے)"
+                            text = if (customerHasToPay)
+                                "Amount you have to pay to business (دکان کو ادا کرنا ہے)"
                             else
-                                "Amount you have to pay to business (دینا ہے)",
+                                "Amount you will receive from business (دکان سے وصول کرنا ہے)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = NavyDark
                         )
                         Text(
-                            text = if (isCustomerReceivable) "GET" else "GIVE",
+                            text = if (customerHasToPay) "دینا ہے (GIVE)" else "لینا ہے (GET)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = if (isCustomerReceivable) ReceivableRed else PayableGreen
+                            color = if (customerHasToPay) ReceivableRed else PayableGreen
                         )
                     }
                 }
@@ -747,9 +747,8 @@ fun CustomerLedgerView(
             border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                val rawBalType = customer?.balanceType ?: BalanceType.PAYABLE
-                val isCustReceivable = rawBalType == BalanceType.PAYABLE
-                val custDisplayType = if (isCustReceivable) BalanceType.RECEIVABLE else BalanceType.PAYABLE
+                val rawBalType = customer?.balanceType ?: BalanceType.RECEIVABLE
+                val customerHasToPay = rawBalType == BalanceType.RECEIVABLE
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -762,10 +761,10 @@ fun CustomerLedgerView(
                             text = FormatUtils.formatPkr(customer?.balance ?: 0.0),
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (isCustReceivable) ReceivableRed else PayableGreen
+                            color = if (customerHasToPay) ReceivableRed else PayableGreen
                         )
                     }
-                    BalanceBadge(balanceType = custDisplayType, isLarge = false)
+                    CustomerBalanceBadge(adminBalanceType = rawBalType, isLarge = false)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

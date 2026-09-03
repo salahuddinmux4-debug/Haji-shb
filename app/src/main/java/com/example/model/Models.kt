@@ -1,8 +1,8 @@
 package com.example.model
 
 enum class BalanceType {
-    RECEIVABLE, // GET -> Customer has to receive money (Red)
-    PAYABLE     // GIVE -> Customer has to pay money (Green)
+    RECEIVABLE, // Business has to RECEIVE from customer (گاہک سے لینا ہے / Customer owes business)
+    PAYABLE     // Business has to PAY to customer (گاہک کو دینا ہے / Business owes customer)
 }
 
 enum class MarketStatus {

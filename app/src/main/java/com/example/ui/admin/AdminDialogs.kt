@@ -1,5 +1,6 @@
 package com.example.ui.admin
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -189,30 +190,83 @@ fun AddCustomerDialog(
                     )
 
                     // Balance Type Selection
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        FilterChip(
-                            selected = balanceType == BalanceType.RECEIVABLE,
-                            onClick = { balanceType = BalanceType.RECEIVABLE },
-                            label = { Text("GET / RECEIVABLE (Red)", fontWeight = FontWeight.Bold) },
-                            modifier = Modifier.weight(1f).testTag("chip_receivable"),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = ReceivableRedBg,
-                                selectedLabelColor = ReceivableRed
-                            )
-                        )
-                        FilterChip(
-                            selected = balanceType == BalanceType.PAYABLE,
-                            onClick = { balanceType = BalanceType.PAYABLE },
-                            label = { Text("GIVE / PAYABLE (Green)", fontWeight = FontWeight.Bold) },
-                            modifier = Modifier.weight(1f).testTag("chip_payable"),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PayableGreenBg,
-                                selectedLabelColor = PayableGreen
-                            )
-                        )
+                    Text("Balance Status (کھاتہ کی نوعیت):", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (balanceType == BalanceType.RECEIVABLE) ReceivableRedBg else Color(0xFFF8FAFC),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                if (balanceType == BalanceType.RECEIVABLE) ReceivableRed else CardBorder
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { balanceType = BalanceType.RECEIVABLE }
+                                .testTag("chip_receivable")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                RadioButton(
+                                    selected = balanceType == BalanceType.RECEIVABLE,
+                                    onClick = { balanceType = BalanceType.RECEIVABLE },
+                                    colors = RadioButtonDefaults.colors(selectedColor = ReceivableRed)
+                                )
+                                Column {
+                                    Text(
+                                        "گاہک سے لینا ہے (Customer to Pay)",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = if (balanceType == BalanceType.RECEIVABLE) ReceivableRed else NavyDark
+                                    )
+                                    Text(
+                                        "Customer owes business / گاہک کے ذمے بقایا (RECEIVABLE)",
+                                        fontSize = 11.sp,
+                                        color = SlateMuted
+                                    )
+                                }
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (balanceType == BalanceType.PAYABLE) PayableGreenBg else Color(0xFFF8FAFC),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                if (balanceType == BalanceType.PAYABLE) PayableGreen else CardBorder
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { balanceType = BalanceType.PAYABLE }
+                                .testTag("chip_payable")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                RadioButton(
+                                    selected = balanceType == BalanceType.PAYABLE,
+                                    onClick = { balanceType = BalanceType.PAYABLE },
+                                    colors = RadioButtonDefaults.colors(selectedColor = PayableGreen)
+                                )
+                                Column {
+                                    Text(
+                                        "گاہک کو دینا ہے (Business to Pay)",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = if (balanceType == BalanceType.PAYABLE) PayableGreen else NavyDark
+                                    )
+                                    Text(
+                                        "Business owes customer / دکان نے گاہک کو دینا ہے (PAYABLE)",
+                                        fontSize = 11.sp,
+                                        color = SlateMuted
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // Customer Specific Rate Toggle
@@ -630,32 +684,84 @@ fun UpdateBalanceDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
 
-                Text("Balance Type", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NavyDark)
+                Text("Balance Status (کھاتہ کی نوعیت):", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NavyDark)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = balanceType == BalanceType.RECEIVABLE,
-                        onClick = { balanceType = BalanceType.RECEIVABLE },
-                        label = { Text("GET (Red)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                        modifier = Modifier.weight(1f).testTag("select_receivable"),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = ReceivableRedBg,
-                            selectedLabelColor = ReceivableRed
-                        )
-                    )
-                    FilterChip(
-                        selected = balanceType == BalanceType.PAYABLE,
-                        onClick = { balanceType = BalanceType.PAYABLE },
-                        label = { Text("GIVE (Green)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
-                        modifier = Modifier.weight(1f).testTag("select_payable"),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PayableGreenBg,
-                            selectedLabelColor = PayableGreen
-                        )
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (balanceType == BalanceType.RECEIVABLE) ReceivableRedBg else Color(0xFFF8FAFC),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (balanceType == BalanceType.RECEIVABLE) ReceivableRed else CardBorder
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { balanceType = BalanceType.RECEIVABLE }
+                            .testTag("select_receivable")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            RadioButton(
+                                selected = balanceType == BalanceType.RECEIVABLE,
+                                onClick = { balanceType = BalanceType.RECEIVABLE },
+                                colors = RadioButtonDefaults.colors(selectedColor = ReceivableRed)
+                            )
+                            Column {
+                                Text(
+                                    "گاہک سے لینا ہے (Customer to Pay)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (balanceType == BalanceType.RECEIVABLE) ReceivableRed else NavyDark
+                                )
+                                Text(
+                                    "Customer owes business / گاہک کے ذمے بقایا (RECEIVABLE)",
+                                    fontSize = 11.sp,
+                                    color = SlateMuted
+                                )
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (balanceType == BalanceType.PAYABLE) PayableGreenBg else Color(0xFFF8FAFC),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (balanceType == BalanceType.PAYABLE) PayableGreen else CardBorder
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { balanceType = BalanceType.PAYABLE }
+                            .testTag("select_payable")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            RadioButton(
+                                selected = balanceType == BalanceType.PAYABLE,
+                                onClick = { balanceType = BalanceType.PAYABLE },
+                                colors = RadioButtonDefaults.colors(selectedColor = PayableGreen)
+                            )
+                            Column {
+                                Text(
+                                    "گاہک کو دینا ہے (Business to Pay)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (balanceType == BalanceType.PAYABLE) PayableGreen else NavyDark
+                                )
+                                Text(
+                                    "Business owes customer / دکان نے گاہک کو دینا ہے (PAYABLE)",
+                                    fontSize = 11.sp,
+                                    color = SlateMuted
+                                )
+                            }
+                        }
+                    }
                 }
 
                 OutlinedTextField(
@@ -910,7 +1016,7 @@ fun AddBillDialog(
     val (newPreviewBalance, newPreviewType) = remember(currentCust, billAmount) {
         if (currentCust != null) {
             val signed = if (currentCust.balanceType == BalanceType.RECEIVABLE) currentCust.balance else -currentCust.balance
-            val newSigned = signed + billAmount
+            val newSigned = signed - billAmount
             if (newSigned >= 0) Pair(newSigned, BalanceType.RECEIVABLE) else Pair(-newSigned, BalanceType.PAYABLE)
         } else Pair(0.0, BalanceType.RECEIVABLE)
     }
@@ -1401,7 +1507,7 @@ fun AddPaymentDialog(
     val (newPreviewBalance, newPreviewType) = remember(currentCust, payAmount) {
         if (currentCust != null) {
             val signed = if (currentCust.balanceType == BalanceType.RECEIVABLE) currentCust.balance else -currentCust.balance
-            val newSigned = signed - payAmount
+            val newSigned = signed + payAmount
             if (newSigned >= 0) Pair(newSigned, BalanceType.RECEIVABLE) else Pair(-newSigned, BalanceType.PAYABLE)
         } else Pair(0.0, BalanceType.RECEIVABLE)
     }
