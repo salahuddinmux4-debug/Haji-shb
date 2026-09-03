@@ -424,31 +424,32 @@ fun CustomerDashboardView(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        Icon(
+                            imageVector = if (customerHasToPay) Icons.Default.Info else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = if (customerHasToPay) ReceivableRed else PayableGreen,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Text(
                             text = if (customerHasToPay)
                                 "Amount you have to pay to business (دکان کو ادا کرنا ہے)"
                             else
                                 "Amount you will receive from business (دکان سے وصول کرنا ہے)",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = NavyDark
-                        )
-                        Text(
-                            text = if (customerHasToPay) "دینا ہے (GIVE)" else "لینا ہے (GET)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (customerHasToPay) ReceivableRed else PayableGreen
+                            fontWeight = FontWeight.SemiBold,
+                            color = NavyDark,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
