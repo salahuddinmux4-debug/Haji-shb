@@ -17,7 +17,7 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE id = :id")
     suspend fun getCustomerById(id: String): CustomerEntity?
 
-    @Query("SELECT * FROM customers WHERE LOWER(TRIM(username)) = LOWER(TRIM(:username)) OR LOWER(TRIM(name)) = LOWER(TRIM(:username)) LIMIT 1")
+    @Query("SELECT * FROM customers WHERE LOWER(TRIM(username)) = LOWER(TRIM(:username)) OR LOWER(TRIM(name)) = LOWER(TRIM(:username)) OR REPLACE(phone, '-', '') = REPLACE(TRIM(:username), '-', '') LIMIT 1")
     suspend fun getCustomerByUsername(username: String): CustomerEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

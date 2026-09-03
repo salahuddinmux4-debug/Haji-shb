@@ -377,7 +377,12 @@ class CloudDatabaseService(private val context: Context? = null) {
                             sharedMemoryCustomers[c.id] = c
                             sharedMemoryCustomers[c.username.lowercase().trim()] = c
                             sharedMemoryCustomers[c.name.lowercase().trim()] = c
-                            if (c.username.equals(cleanUsername, ignoreCase = true) || c.name.equals(cleanUsername, ignoreCase = true)) {
+                            val isMatch = c.username.equals(cleanUsername, ignoreCase = true) ||
+                                    c.name.equals(cleanUsername, ignoreCase = true) ||
+                                    c.name.lowercase().trim().replace(" ", "").equals(cleanUsername.replace(" ", ""), ignoreCase = true) ||
+                                    c.username.lowercase().trim().replace("_", "").equals(cleanUsername.replace("_", "").replace(" ", ""), ignoreCase = true) ||
+                                    (cleanUsername.length >= 6 && c.phone.replace("-", "").replace(" ", "").contains(cleanUsername.replace("-", "").replace(" ", "")))
+                            if (isMatch) {
                                 Log.i(TAG, "Customer '$cleanUsername' located in Cloud Directory. UID: ${c.id}")
                                 return@withContext Result.success(c)
                             }

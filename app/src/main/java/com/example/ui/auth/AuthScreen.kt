@@ -246,24 +246,107 @@ fun AuthScreen(
                                 color = ReceivableRedBg,
                                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(ReceivableRedBorder))
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ErrorOutline,
-                                        contentDescription = "Error",
-                                        tint = ReceivableRed,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = (uiState as AuthUiState.Error).message,
-                                        color = ReceivableRed,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ErrorOutline,
+                                            contentDescription = "Error",
+                                            tint = ReceivableRed,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = (uiState as AuthUiState.Error).message,
+                                            color = ReceivableRed,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    val errorMsg = (uiState as AuthUiState.Error).message
+                                    if (errorMsg.contains("Admin account detected") || errorMsg.contains("Admin Portal")) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Button(
+                                            onClick = {
+                                                authViewModel.setTab(UserRole.ADMIN)
+                                                username = "admin"
+                                                password = "admin123"
+                                                authViewModel.clearError()
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            modifier = Modifier.padding(top = 6.dp)
+                                        ) {
+                                            Text("Switch to Admin Portal", fontSize = 12.sp, color = Color.White)
+                                        }
+                                    } else if (errorMsg.contains("not found")) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Button(
+                                            onClick = {
+                                                username = "khalid"
+                                                password = "123456"
+                                                authViewModel.clearError()
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            modifier = Modifier.padding(top = 6.dp)
+                                        ) {
+                                            Text("Fill 'khalid' (Pass: 123456)", fontSize = 12.sp, color = Color.White)
+                                        }
+                                    }
                                 }
+                            }
+                        }
+
+                        // Quick Fill Chips
+                        Text(
+                            text = if (selectedTab == UserRole.CUSTOMER) "Quick Demo Login (Tap to fill):" else "Admin Demo Login (Tap to fill):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (selectedTab == UserRole.CUSTOMER) {
+                                SuggestionChip(
+                                    onClick = {
+                                        username = "khalid"
+                                        password = "123456"
+                                        authViewModel.clearError()
+                                    },
+                                    label = { Text("Khalid (123456)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    icon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                                    modifier = Modifier.testTag("chip_fill_khalid")
+                                )
+                                SuggestionChip(
+                                    onClick = {
+                                        username = "abdul_hameed"
+                                        password = "123456"
+                                        authViewModel.clearError()
+                                    },
+                                    label = { Text("Abdul Hameed", fontSize = 11.sp) },
+                                    icon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                                    modifier = Modifier.testTag("chip_fill_abdul")
+                                )
+                            } else {
+                                SuggestionChip(
+                                    onClick = {
+                                        username = "admin"
+                                        password = "admin123"
+                                        authViewModel.clearError()
+                                    },
+                                    label = { Text("Admin (admin123)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    icon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(14.dp)) },
+                                    modifier = Modifier.testTag("chip_fill_admin")
+                                )
                             }
                         }
 
@@ -275,7 +358,7 @@ fun AuthScreen(
                                 authViewModel.clearError()
                             },
                             label = { Text(if (selectedTab == UserRole.CUSTOMER) "Customer Username" else "Admin Username") },
-                            placeholder = { Text(if (selectedTab == UserRole.CUSTOMER) "e.g. abdul_hameed" else "admin") },
+                            placeholder = { Text(if (selectedTab == UserRole.CUSTOMER) "e.g. khalid or 0300-1234567" else "admin") },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Person,
