@@ -90,6 +90,10 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    init {
+        syncWithCloud()
+    }
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }

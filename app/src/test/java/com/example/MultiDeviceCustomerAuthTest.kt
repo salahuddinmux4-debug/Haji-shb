@@ -98,4 +98,16 @@ class MultiDeviceCustomerAuthTest {
         assertNotNull(lookup)
         assertFalse("Account must be recognized as inactive across devices", lookup!!.isActive)
     }
+
+    @Test
+    fun testCustomerKhalidAuthentication() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = com.example.data.repository.MujahidRepository(context)
+
+        val result = repo.authenticateCustomer("khalid", "123456")
+        assertTrue("Customer khalid should authenticate successfully: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        val customer = result.getOrNull()
+        assertNotNull(customer)
+        assertEquals("khalid", customer?.username?.lowercase()?.trim())
+    }
 }

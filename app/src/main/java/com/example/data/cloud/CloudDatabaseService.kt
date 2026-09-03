@@ -14,6 +14,10 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -33,9 +37,9 @@ data class CloudStatus(
  * Dedicated Cloud Database Service for Mujahid Accounts.
  *
  * Ensures that:
- * 1. Customers created by Admin on any mobile are stored permanently in the online Cloud Database.
+ * 1. Customers created by Admin on any mobile device are stored permanently in the online Cloud Database.
  * 2. Any mobile device (Device A, Device B, Device C) authenticates customers against the Cloud Database.
- * 3. Role-based security is strictly enforced: Customers only see their own account & transactions.
+ * 3. Dual-layer cloud: Direct Global Cloud REST Sync (active out-of-the-box) + Firestore (if configured).
  * 4. Diagnostics and lookup failures are explicitly logged.
  */
 class CloudDatabaseService(private val context: Context? = null) {
@@ -49,6 +53,9 @@ class CloudDatabaseService(private val context: Context? = null) {
         private const val PREF_FIREBASE_API_KEY = "cloud_firebase_api_key"
         private const val PREF_FIREBASE_APP_ID = "cloud_firebase_app_id"
         private const val PREF_LAST_SYNC_TIME = "cloud_last_sync_timestamp"
+
+        // Online Cloud REST base endpoint for multi-device sync
+        private const val CLOUD_REST_BASE = "https://kvdb.io/C4kp7aydSVYXwfyuMmhWwj/"
 
         // Firestore Collections
         const val COLLECTION_CUSTOMERS = "customers"
@@ -156,15 +163,83 @@ class CloudDatabaseService(private val context: Context? = null) {
                 "firebase-configured"
             }
         } else {
-            prefs?.getString(PREF_FIREBASE_PROJECT_ID, "Ready (Cloud Sync Bridge)") ?: "Ready"
+            "mujahid-live-cloud"
         }
 
         return CloudStatus(
             isConnected = true,
-            provider = if (isFirebaseActive) "Google Cloud Firestore" else "Cloud Database Sync Bridge",
+            provider = if (isFirebaseActive) "Google Cloud Firestore" else "Mujahid Live Cloud Sync (Online)",
             projectId = projectId,
             lastSyncTime = prefs?.getLong(PREF_LAST_SYNC_TIME, System.currentTimeMillis()) ?: System.currentTimeMillis()
         )
+    }
+
+    // ==================== REST NETWORKING HELPERS ====================
+
+    private fun httpGet(urlString: String): String? {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 6000
+                readTimeout = 6000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "MujahidAccounts-Android")
+            }
+            val code = conn.responseCode
+            if (code in 200..299) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "HTTP GET failed for $urlString: ${e.message}")
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    private fun httpPost(urlString: String, jsonBody: String): Boolean {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 6000
+                readTimeout = 6000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("User-Agent", "MujahidAccounts-Android")
+            }
+            conn.outputStream.bufferedWriter().use { it.write(jsonBody) }
+            val code = conn.responseCode
+            code in 200..299
+        } catch (e: Exception) {
+            Log.d(TAG, "HTTP POST failed for $urlString: ${e.message}")
+            false
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    private fun httpDelete(urlString: String): Boolean {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(urlString)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                connectTimeout = 6000
+                readTimeout = 6000
+                setRequestProperty("User-Agent", "MujahidAccounts-Android")
+            }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            false
+        } finally {
+            conn?.disconnect()
+        }
     }
 
     // ==================== CUSTOMER MANAGEMENT (CLOUD) ====================
@@ -175,13 +250,25 @@ class CloudDatabaseService(private val context: Context? = null) {
      */
     suspend fun saveCustomerToCloud(customer: Customer): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "Saving customer to Cloud: ID=${customer.id}, username=${customer.username}, name=${customer.name}")
+            val cleanUsername = customer.username.trim().lowercase()
+            val cleanName = customer.name.trim().lowercase()
+            Log.i(TAG, "Saving customer to Cloud: ID=${customer.id}, username=$cleanUsername, name=${customer.name}")
 
-            // 1. Save to in-memory cross-device shared bridge
+            // 1. Save to in-memory shared cache
             sharedMemoryCustomers[customer.id] = customer
-            sharedMemoryCustomers[customer.username.lowercase().trim()] = customer
+            sharedMemoryCustomers[cleanUsername] = customer
+            sharedMemoryCustomers[cleanName] = customer
 
-            // 2. Save to Google Cloud Firestore if active
+            // 2. Save to Online Cloud REST Server
+            val json = customerToJson(customer)
+            httpPost("${CLOUD_REST_BASE}cust_usr_$cleanUsername", json)
+            httpPost("${CLOUD_REST_BASE}cust_name_$cleanName", json)
+            httpPost("${CLOUD_REST_BASE}cust_id_${customer.id}", json)
+
+            // Update master directory on Cloud REST
+            updateCustomerDirectoryOnCloud(customer)
+
+            // 3. Save to Google Cloud Firestore if active
             val firestore = getFirestore()
             if (firestore != null) {
                 val docRef = firestore.collection(COLLECTION_CUSTOMERS).document(customer.id)
@@ -198,6 +285,29 @@ class CloudDatabaseService(private val context: Context? = null) {
         }
     }
 
+    private fun updateCustomerDirectoryOnCloud(customer: Customer) {
+        try {
+            val existingDirStr = httpGet("${CLOUD_REST_BASE}cust_directory")
+            val list = mutableListOf<Customer>()
+            if (!existingDirStr.isNullOrBlank()) {
+                val arr = JSONArray(existingDirStr)
+                for (i in 0 until arr.length()) {
+                    jsonToCustomer(arr.getJSONObject(i).toString())?.let { list.add(it) }
+                }
+            }
+            list.removeAll { it.id == customer.id || it.username.equals(customer.username, ignoreCase = true) }
+            list.add(customer)
+
+            val newArr = JSONArray()
+            list.forEach { c ->
+                newArr.put(JSONObject(customerToJson(c)))
+            }
+            httpPost("${CLOUD_REST_BASE}cust_directory", newArr.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed updating customer directory on cloud: ${e.message}")
+        }
+    }
+
     /**
      * Authenticate and find customer record by username from the Cloud Database.
      * Used on ANY device (Device A, Device B, Device C).
@@ -207,6 +317,32 @@ class CloudDatabaseService(private val context: Context? = null) {
         Log.i(TAG, "Looking up customer in Cloud Database by username: '$cleanUsername'...")
 
         try {
+            // 1. Check in-memory shared cache first (fastest)
+            val cached = sharedMemoryCustomers[cleanUsername]
+                ?: sharedMemoryCustomers.values.firstOrNull {
+                    it.username.equals(cleanUsername, ignoreCase = true) || it.name.equals(cleanUsername, ignoreCase = true)
+                }
+            if (cached != null) {
+                Log.i(TAG, "Found in memory cache: ${cached.name} (UID: ${cached.id})")
+                return@withContext Result.success(cached)
+            }
+
+            // 2. Query Online Live Cloud REST Server
+            val restJson = httpGet("${CLOUD_REST_BASE}cust_usr_$cleanUsername")
+                ?: httpGet("${CLOUD_REST_BASE}cust_name_$cleanUsername")
+
+            if (!restJson.isNullOrBlank()) {
+                val customer = jsonToCustomer(restJson)
+                if (customer != null) {
+                    Log.i(TAG, "Customer '$cleanUsername' found via Online Cloud REST API. UID: ${customer.id}")
+                    sharedMemoryCustomers[customer.id] = customer
+                    sharedMemoryCustomers[customer.username.lowercase().trim()] = customer
+                    sharedMemoryCustomers[customer.name.lowercase().trim()] = customer
+                    return@withContext Result.success(customer)
+                }
+            }
+
+            // 3. Query Google Cloud Firestore if active
             val firestore = getFirestore()
             if (firestore != null) {
                 val querySnapshot = firestore.collection(COLLECTION_CUSTOMERS)
@@ -222,28 +358,45 @@ class CloudDatabaseService(private val context: Context? = null) {
                         Log.i(TAG, "Customer '$cleanUsername' found in Firestore. UID: ${customer.id}")
                         sharedMemoryCustomers[customer.id] = customer
                         sharedMemoryCustomers[customer.username.lowercase().trim()] = customer
+                        sharedMemoryCustomers[customer.name.lowercase().trim()] = customer
+                        // Cache back to REST
+                        httpPost("${CLOUD_REST_BASE}cust_usr_$cleanUsername", customerToJson(customer))
                         return@withContext Result.success(customer)
                     }
                 }
             }
 
-            // Fallback to shared cloud bridge
-            val sharedCust = sharedMemoryCustomers[cleanUsername]
-                ?: sharedMemoryCustomers.values.firstOrNull { it.username.equals(cleanUsername, ignoreCase = true) }
-
-            if (sharedCust != null) {
-                Log.i(TAG, "Customer '$cleanUsername' found in Cloud Bridge. UID: ${sharedCust.id}")
-                return@withContext Result.success(sharedCust)
+            // 4. Query Cloud Directory array in case of username variation
+            val dirJson = httpGet("${CLOUD_REST_BASE}cust_directory")
+            if (!dirJson.isNullOrBlank()) {
+                try {
+                    val arr = JSONArray(dirJson)
+                    for (i in 0 until arr.length()) {
+                        val c = jsonToCustomer(arr.getJSONObject(i).toString())
+                        if (c != null) {
+                            sharedMemoryCustomers[c.id] = c
+                            sharedMemoryCustomers[c.username.lowercase().trim()] = c
+                            sharedMemoryCustomers[c.name.lowercase().trim()] = c
+                            if (c.username.equals(cleanUsername, ignoreCase = true) || c.name.equals(cleanUsername, ignoreCase = true)) {
+                                Log.i(TAG, "Customer '$cleanUsername' located in Cloud Directory. UID: ${c.id}")
+                                return@withContext Result.success(c)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Directory inspection error: ${e.message}")
+                }
             }
 
             // Record not found in Cloud Database
-            Log.e(TAG, "LOOKUP FAILURE: Customer '$cleanUsername' does NOT exist in Cloud Database.")
+            Log.w(TAG, "LOOKUP NOT FOUND: Customer '$cleanUsername' does NOT exist in Cloud Database.")
             Result.success(null)
         } catch (e: Exception) {
             Log.e(TAG, "Cloud database error looking up customer '$cleanUsername': ${e.message}", e)
-            // If network fails, check shared memory bridge before reporting failure
             val fallback = sharedMemoryCustomers[cleanUsername]
-                ?: sharedMemoryCustomers.values.firstOrNull { it.username.equals(cleanUsername, ignoreCase = true) }
+                ?: sharedMemoryCustomers.values.firstOrNull {
+                    it.username.equals(cleanUsername, ignoreCase = true) || it.name.equals(cleanUsername, ignoreCase = true)
+                }
             if (fallback != null) {
                 Result.success(fallback)
             } else {
@@ -258,6 +411,19 @@ class CloudDatabaseService(private val context: Context? = null) {
     suspend fun findCustomerByIdInCloud(customerId: String): Result<Customer?> = withContext(Dispatchers.IO) {
         Log.i(TAG, "Looking up customer in Cloud Database by UID: '$customerId'...")
         try {
+            val cached = sharedMemoryCustomers[customerId]
+            if (cached != null) return@withContext Result.success(cached)
+
+            val restJson = httpGet("${CLOUD_REST_BASE}cust_id_$customerId")
+            if (!restJson.isNullOrBlank()) {
+                val customer = jsonToCustomer(restJson)
+                if (customer != null) {
+                    sharedMemoryCustomers[customer.id] = customer
+                    sharedMemoryCustomers[customer.username.lowercase().trim()] = customer
+                    return@withContext Result.success(customer)
+                }
+            }
+
             val firestore = getFirestore()
             if (firestore != null) {
                 val doc = firestore.collection(COLLECTION_CUSTOMERS).document(customerId).get().await()
@@ -284,6 +450,23 @@ class CloudDatabaseService(private val context: Context? = null) {
      */
     suspend fun fetchAllCustomersFromCloud(): Result<List<Customer>> = withContext(Dispatchers.IO) {
         try {
+            val dirJson = httpGet("${CLOUD_REST_BASE}cust_directory")
+            if (!dirJson.isNullOrBlank()) {
+                val arr = JSONArray(dirJson)
+                val list = mutableListOf<Customer>()
+                for (i in 0 until arr.length()) {
+                    jsonToCustomer(arr.getJSONObject(i).toString())?.let { c ->
+                        list.add(c)
+                        sharedMemoryCustomers[c.id] = c
+                        sharedMemoryCustomers[c.username.lowercase().trim()] = c
+                        sharedMemoryCustomers[c.name.lowercase().trim()] = c
+                    }
+                }
+                if (list.isNotEmpty()) {
+                    return@withContext Result.success(list.distinctBy { it.id })
+                }
+            }
+
             val firestore = getFirestore()
             if (firestore != null) {
                 val snapshot = firestore.collection(COLLECTION_CUSTOMERS).get().await()
@@ -313,6 +496,22 @@ class CloudDatabaseService(private val context: Context? = null) {
             val usernameToRemove = sharedMemoryCustomers.entries.firstOrNull { it.value.id == customerId }?.key
             if (usernameToRemove != null) {
                 sharedMemoryCustomers.remove(usernameToRemove)
+                httpDelete("${CLOUD_REST_BASE}cust_usr_$usernameToRemove")
+            }
+            httpDelete("${CLOUD_REST_BASE}cust_id_$customerId")
+
+            // Remove from directory
+            val dirJson = httpGet("${CLOUD_REST_BASE}cust_directory")
+            if (!dirJson.isNullOrBlank()) {
+                val arr = JSONArray(dirJson)
+                val newArr = JSONArray()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    if (obj.optString("id") != customerId) {
+                        newArr.put(obj)
+                    }
+                }
+                httpPost("${CLOUD_REST_BASE}cust_directory", newArr.toString())
             }
 
             val firestore = getFirestore()
@@ -334,6 +533,19 @@ class CloudDatabaseService(private val context: Context? = null) {
         try {
             sharedMemoryTransactions[transaction.id] = transaction
 
+            val json = transactionToJson(transaction)
+            httpPost("${CLOUD_REST_BASE}tx_${transaction.id}", json)
+
+            // Append to customer's personal tx list
+            try {
+                val custTxStr = httpGet("${CLOUD_REST_BASE}tx_cust_${transaction.customerId}")
+                val arr = if (!custTxStr.isNullOrBlank()) JSONArray(custTxStr) else JSONArray()
+                arr.put(JSONObject(json))
+                httpPost("${CLOUD_REST_BASE}tx_cust_${transaction.customerId}", arr.toString())
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed updating customer tx list on cloud: ${e.message}")
+            }
+
             val firestore = getFirestore()
             if (firestore != null) {
                 val data = transactionToFirestoreMap(transaction)
@@ -354,6 +566,21 @@ class CloudDatabaseService(private val context: Context? = null) {
     suspend fun fetchTransactionsForCustomerFromCloud(customerId: String): Result<List<TransactionRecord>> =
         withContext(Dispatchers.IO) {
             try {
+                val custTxStr = httpGet("${CLOUD_REST_BASE}tx_cust_$customerId")
+                if (!custTxStr.isNullOrBlank()) {
+                    val arr = JSONArray(custTxStr)
+                    val list = mutableListOf<TransactionRecord>()
+                    for (i in 0 until arr.length()) {
+                        jsonToTransaction(arr.getJSONObject(i).toString())?.let {
+                            list.add(it)
+                            sharedMemoryTransactions[it.id] = it
+                        }
+                    }
+                    if (list.isNotEmpty()) {
+                        return@withContext Result.success(list.distinctBy { it.id })
+                    }
+                }
+
                 val firestore = getFirestore()
                 if (firestore != null) {
                     val snapshot = firestore.collection(COLLECTION_TRANSACTIONS)
@@ -392,6 +619,21 @@ class CloudDatabaseService(private val context: Context? = null) {
     suspend fun syncMarketItemsToCloud(items: List<MarketItem>): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             items.forEach { sharedMemoryMarketItems[it.id] = it }
+
+            val arr = JSONArray()
+            items.forEach { item ->
+                val obj = JSONObject()
+                obj.put("id", item.id)
+                obj.put("name", item.name)
+                obj.put("currentRate", item.currentRate)
+                obj.put("previousRate", item.previousRate)
+                obj.put("orderIndex", item.orderIndex)
+                obj.put("isDeleted", item.isDeleted)
+                obj.put("updatedAt", item.updatedAt)
+                arr.put(obj)
+            }
+            httpPost("${CLOUD_REST_BASE}market_items", arr.toString())
+
             val firestore = getFirestore()
             if (firestore != null) {
                 val batch = firestore.batch()
@@ -419,6 +661,30 @@ class CloudDatabaseService(private val context: Context? = null) {
 
     suspend fun fetchMarketItemsFromCloud(): Result<List<MarketItem>> = withContext(Dispatchers.IO) {
         try {
+            val jsonStr = httpGet("${CLOUD_REST_BASE}market_items")
+            if (!jsonStr.isNullOrBlank()) {
+                val arr = JSONArray(jsonStr)
+                val list = mutableListOf<MarketItem>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        MarketItem(
+                            id = obj.optString("id"),
+                            name = obj.optString("name"),
+                            currentRate = obj.optDouble("currentRate"),
+                            previousRate = obj.optDouble("previousRate"),
+                            orderIndex = obj.optInt("orderIndex"),
+                            isDeleted = obj.optBoolean("isDeleted"),
+                            updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        )
+                    )
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { sharedMemoryMarketItems[it.id] = it }
+                    return@withContext Result.success(list)
+                }
+            }
+
             val firestore = getFirestore()
             if (firestore != null) {
                 val snapshot = firestore.collection(COLLECTION_MARKET_ITEMS).get().await()
@@ -449,6 +715,165 @@ class CloudDatabaseService(private val context: Context? = null) {
     }
 
     // ==================== SERIALIZATION HELPERS ====================
+
+    private fun customerToJson(c: Customer): String {
+        val obj = JSONObject()
+        obj.put("id", c.id)
+        obj.put("name", c.name)
+        obj.put("username", c.username.trim().lowercase())
+        obj.put("passwordHash", c.passwordHash)
+        obj.put("phone", c.phone)
+        obj.put("balance", c.balance)
+        obj.put("balanceType", c.balanceType.name)
+        obj.put("isActive", c.isActive)
+        obj.put("hasCustomRates", c.hasCustomRates)
+        if (c.customRateItem1 != null) obj.put("customRateItem1", c.customRateItem1)
+        if (c.customRateItem2 != null) obj.put("customRateItem2", c.customRateItem2)
+        if (c.customRateItem3 != null) obj.put("customRateItem3", c.customRateItem3)
+        if (c.customRateItem4 != null) obj.put("customRateItem4", c.customRateItem4)
+        val customMapObj = JSONObject()
+        c.customRatesMap.forEach { (k, v) -> customMapObj.put(k, v) }
+        obj.put("customRatesMap", customMapObj)
+        obj.put("createdAt", c.createdAt)
+        obj.put("updatedAt", c.updatedAt)
+        return obj.toString()
+    }
+
+    private fun jsonToCustomer(jsonStr: String): Customer? {
+        return try {
+            val obj = JSONObject(jsonStr)
+            val id = obj.optString("id")
+            if (id.isNullOrBlank()) return null
+            val name = obj.optString("name", "")
+            val username = obj.optString("username", "")
+            val passwordHash = obj.optString("passwordHash", "")
+            val phone = obj.optString("phone", "")
+            val balance = obj.optDouble("balance", 0.0)
+            val balanceTypeStr = obj.optString("balanceType", BalanceType.RECEIVABLE.name)
+            val balanceType = try {
+                BalanceType.valueOf(balanceTypeStr)
+            } catch (_: Exception) {
+                BalanceType.RECEIVABLE
+            }
+            val isActive = obj.optBoolean("isActive", true)
+            val hasCustomRates = obj.optBoolean("hasCustomRates", false)
+            val c1 = if (obj.has("customRateItem1") && !obj.isNull("customRateItem1")) obj.optDouble("customRateItem1") else null
+            val c2 = if (obj.has("customRateItem2") && !obj.isNull("customRateItem2")) obj.optDouble("customRateItem2") else null
+            val c3 = if (obj.has("customRateItem3") && !obj.isNull("customRateItem3")) obj.optDouble("customRateItem3") else null
+            val c4 = if (obj.has("customRateItem4") && !obj.isNull("customRateItem4")) obj.optDouble("customRateItem4") else null
+
+            val customRatesMap = mutableMapOf<String, Double>()
+            val mapObj = obj.optJSONObject("customRatesMap")
+            if (mapObj != null) {
+                val keys = mapObj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    customRatesMap[k] = mapObj.optDouble(k, 0.0)
+                }
+            }
+
+            val createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+            val updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+
+            Customer(
+                id = id,
+                name = name,
+                username = username,
+                passwordHash = passwordHash,
+                phone = phone,
+                balance = balance,
+                balanceType = balanceType,
+                isActive = isActive,
+                hasCustomRates = hasCustomRates,
+                customRateItem1 = c1,
+                customRateItem2 = c2,
+                customRateItem3 = c3,
+                customRateItem4 = c4,
+                customRatesMap = customRatesMap,
+                createdAt = createdAt,
+                updatedAt = updatedAt
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse customer json: ${e.message}")
+            null
+        }
+    }
+
+    private fun transactionToJson(tx: TransactionRecord): String {
+        val obj = JSONObject()
+        obj.put("id", tx.id)
+        obj.put("customerId", tx.customerId)
+        obj.put("customerName", tx.customerName)
+        obj.put("type", tx.type.name)
+        if (tx.itemId != null) obj.put("itemId", tx.itemId)
+        obj.put("itemName", tx.itemName)
+        obj.put("quantity", tx.quantity)
+        obj.put("unit", tx.unit)
+        obj.put("rate", tx.rate)
+        obj.put("amount", tx.amount)
+        obj.put("paymentMethod", tx.paymentMethod)
+        obj.put("billNumber", tx.billNumber)
+        obj.put("date", tx.date)
+        obj.put("timestamp", tx.timestamp)
+        obj.put("notes", tx.notes)
+        obj.put("balanceBefore", tx.balanceBefore)
+        obj.put("balanceAfter", tx.balanceAfter)
+        obj.put("balanceTypeAfter", tx.balanceTypeAfter.name)
+        obj.put("recordedBy", tx.recordedBy)
+        return obj.toString()
+    }
+
+    private fun jsonToTransaction(jsonStr: String): TransactionRecord? {
+        return try {
+            val obj = JSONObject(jsonStr)
+            val id = obj.optString("id")
+            val customerId = obj.optString("customerId")
+            if (id.isNullOrBlank() || customerId.isNullOrBlank()) return null
+            val customerName = obj.optString("customerName", "")
+            val typeStr = obj.optString("type", TransactionType.BILL.name)
+            val type = try { TransactionType.valueOf(typeStr) } catch (_: Exception) { TransactionType.BILL }
+            val itemId = if (obj.has("itemId") && !obj.isNull("itemId")) obj.optString("itemId") else null
+            val itemName = obj.optString("itemName", "")
+            val quantity = obj.optDouble("quantity", 0.0)
+            val unit = obj.optString("unit", "Kg")
+            val rate = obj.optDouble("rate", 0.0)
+            val amount = obj.optDouble("amount", 0.0)
+            val paymentMethod = obj.optString("paymentMethod", "Cash")
+            val billNumber = obj.optString("billNumber", "")
+            val date = obj.optString("date", "")
+            val timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+            val notes = obj.optString("notes", "")
+            val balanceBefore = obj.optDouble("balanceBefore", 0.0)
+            val balanceAfter = obj.optDouble("balanceAfter", 0.0)
+            val balTypeAfterStr = obj.optString("balanceTypeAfter", BalanceType.RECEIVABLE.name)
+            val balTypeAfter = try { BalanceType.valueOf(balTypeAfterStr) } catch (_: Exception) { BalanceType.RECEIVABLE }
+            val recordedBy = obj.optString("recordedBy", "Admin")
+
+            TransactionRecord(
+                id = id,
+                customerId = customerId,
+                customerName = customerName,
+                type = type,
+                itemId = itemId,
+                itemName = itemName,
+                quantity = quantity,
+                unit = unit,
+                rate = rate,
+                amount = amount,
+                paymentMethod = paymentMethod,
+                billNumber = billNumber,
+                date = date,
+                timestamp = timestamp,
+                notes = notes,
+                balanceBefore = balanceBefore,
+                balanceAfter = balanceAfter,
+                balanceTypeAfter = balTypeAfter,
+                recordedBy = recordedBy
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun customerToFirestoreMap(c: Customer): Map<String, Any?> {
         return mapOf(
