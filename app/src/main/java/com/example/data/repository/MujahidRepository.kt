@@ -78,51 +78,6 @@ class MujahidRepository(private val context: Context) {
             marketItemDao.insertItems(defaultItems.map { MarketItemEntity.fromDomain(it) })
         }
 
-        // Seed default Customers (khalid, abdul_hameed, mujahid) if not already present
-        val defaultSeedCustomers = listOf(
-            Customer(
-                id = "cust_khalid_default",
-                name = "Khalid Traders",
-                username = "khalid",
-                passwordHash = SecurityUtils.hashPassword("123456"),
-                phone = "0300-1234567",
-                balance = 15400.0,
-                balanceType = BalanceType.RECEIVABLE,
-                isActive = true,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            ),
-            Customer(
-                id = "cust_abdul_default",
-                name = "Abdul Hameed Traders",
-                username = "abdul_hameed",
-                passwordHash = SecurityUtils.hashPassword("123456"),
-                phone = "0301-9876543",
-                balance = 8200.0,
-                balanceType = BalanceType.RECEIVABLE,
-                isActive = true,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            ),
-            Customer(
-                id = "cust_mujahid_default",
-                name = "Mujahid Customer",
-                username = "mujahid",
-                passwordHash = SecurityUtils.hashPassword("123456"),
-                phone = "0302-5551234",
-                balance = 5000.0,
-                balanceType = BalanceType.RECEIVABLE,
-                isActive = true,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            )
-        )
-        for (seedCust in defaultSeedCustomers) {
-            val existing = customerDao.getCustomerByUsername(seedCust.username)
-            if (existing == null) {
-                customerDao.insertCustomer(CustomerEntity.fromDomain(seedCust))
-                cloudDatabase.saveCustomerToCloud(seedCust)
-            }
         }
 
         // Seed Initial Market Rates if not present
@@ -207,63 +162,7 @@ class MujahidRepository(private val context: Context) {
             }
         }
 
-        // 3. Auto-seed / recovery for built-in demo users on any new device
-        if (customer == null) {
-            when {
-                cleanUsername == "khalid" || cleanUsername == "khalid traders" -> {
-                    val defaultCustomer = Customer(
-                        id = "cust_khalid_default",
-                        name = "Khalid Traders",
-                        username = "khalid",
-                        passwordHash = SecurityUtils.hashPassword("123456"),
-                        phone = "0300-1234567",
-                        balance = 15400.0,
-                        balanceType = BalanceType.RECEIVABLE,
-                        isActive = true,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    customerDao.insertCustomer(CustomerEntity.fromDomain(defaultCustomer))
-                    cloudDatabase.saveCustomerToCloud(defaultCustomer)
-                    customer = defaultCustomer
-                }
-                cleanUsername == "abdul_hameed" || cleanUsername == "abdul" || cleanUsername == "abdul hameed" -> {
-                    val defaultCustomer = Customer(
-                        id = "cust_abdul_default",
-                        name = "Abdul Hameed Traders",
-                        username = "abdul_hameed",
-                        passwordHash = SecurityUtils.hashPassword("123456"),
-                        phone = "0301-9876543",
-                        balance = 8200.0,
-                        balanceType = BalanceType.RECEIVABLE,
-                        isActive = true,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    customerDao.insertCustomer(CustomerEntity.fromDomain(defaultCustomer))
-                    cloudDatabase.saveCustomerToCloud(defaultCustomer)
-                    customer = defaultCustomer
-                }
-                cleanUsername == "mujahid" -> {
-                    val defaultCustomer = Customer(
-                        id = "cust_mujahid_default",
-                        name = "Mujahid Customer",
-                        username = "mujahid",
-                        passwordHash = SecurityUtils.hashPassword("123456"),
-                        phone = "0302-5551234",
-                        balance = 5000.0,
-                        balanceType = BalanceType.RECEIVABLE,
-                        isActive = true,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    customerDao.insertCustomer(CustomerEntity.fromDomain(defaultCustomer))
-                    cloudDatabase.saveCustomerToCloud(defaultCustomer)
-                    customer = defaultCustomer
-                }
-            }
-        }
-
+        
         // 4. If customer record does not exist in Cloud Database or local
         if (customer == null) {
             Log.e("CustomerAuth", "LOOKUP FAILURE: Customer account '$cleanUsername' does not exist in Cloud Database.")
@@ -283,14 +182,10 @@ class MujahidRepository(private val context: Context) {
         }
 
         // 7. Verify password securely
-        val isDefaultUser = customer.username.equals("khalid", ignoreCase = true) ||
-                customer.username.equals("abdul_hameed", ignoreCase = true) ||
-                customer.username.equals("mujahid", ignoreCase = true)
-        val isPasswordCorrect = SecurityUtils.verifyPassword(plainPass, customer.passwordHash) ||
-                (isDefaultUser && (plainPass == "123456" || plainPass == "khalid123" || plainPass == "admin123" || plainPass == "password"))
-        if (!isPasswordCorrect) {
-            Log.w("CustomerAuth", "Login rejected: Invalid password for customer UID $permanentUid.")
-            return@withContext Result.failure(Exception("Invalid password. Please check your credentials."))
+val isPasswordCorrect =
+    SecurityUtils.verifyPassword(plainPass, customer.passwordHash)
+if (!isPasswordCorrect) {
+return@withContext Result.failure(Exception("Invalid password. Please check your credentials."))
         }
 
         // 7. Sync latest customer record to local cache for offline availability
