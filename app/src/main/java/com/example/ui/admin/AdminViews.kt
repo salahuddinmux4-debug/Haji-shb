@@ -81,6 +81,8 @@ fun AdminHomeScreen(
     var showAddPaymentDialog by remember { mutableStateOf(false) }
     var preselectedCustomerForTx by remember { mutableStateOf<Customer?>(null) }
     var transactionForDetail by remember { mutableStateOf<TransactionRecord?>(null) }
+    var showCloudSettingsDialog by remember { mutableStateOf(false) }
+    val cloudStatus by adminViewModel.cloudStatus.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -287,6 +289,17 @@ fun AdminHomeScreen(
         )
     }
 
+    if (showCloudSettingsDialog) {
+        CloudDatabaseSettingsDialog(
+            cloudStatus = cloudStatus,
+            onDismiss = { showCloudSettingsDialog = false },
+            onSyncNow = { adminViewModel.syncWithCloud() },
+            onConfigureFirebase = { projectId, apiKey, appId ->
+                adminViewModel.configureFirebaseCloud(projectId, apiKey, appId)
+            }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
@@ -315,6 +328,18 @@ fun AdminHomeScreen(
                     }
                 },
                 actions = {
+                    // Cloud Database Status & Sync Button
+                    IconButton(
+                        onClick = { showCloudSettingsDialog = true },
+                        modifier = Modifier.testTag("button_cloud_sync")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudSync,
+                            contentDescription = "Cloud Database Sync",
+                            tint = InfoBlue
+                        )
+                    }
+
                     // Quick Market Status Pill
                     val isOpen = marketRates?.isMarketOpen ?: true
                     Surface(

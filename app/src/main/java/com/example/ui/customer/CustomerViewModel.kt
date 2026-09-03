@@ -77,6 +77,15 @@ class CustomerViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
+        refreshCustomerFromCloud()
+    }
+
+    fun refreshCustomerFromCloud() {
+        if (currentCustomerId.isNotBlank()) {
+            viewModelScope.launch {
+                repository.getCustomerById(currentCustomerId)
+            }
+        }
     }
 
     fun getEffectiveRates(

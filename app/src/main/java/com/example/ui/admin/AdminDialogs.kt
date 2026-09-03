@@ -1,5 +1,6 @@
 package com.example.ui.admin
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.cloud.CloudStatus
 import com.example.model.BalanceType
 import com.example.model.Customer
 import com.example.model.MarketItem
@@ -2032,5 +2035,204 @@ private fun DetailRow(
             fontWeight = if (isBold) FontWeight.Bold else FontWeight.Medium,
             color = valueColor
         )
+    }
+}
+
+@Composable
+fun CloudDatabaseSettingsDialog(
+    cloudStatus: CloudStatus,
+    onDismiss: () -> Unit,
+    onSyncNow: () -> Unit,
+    onConfigureFirebase: (projectId: String, apiKey: String, appId: String?) -> Unit
+) {
+    var projectId by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+    var appId by remember { mutableStateOf("") }
+    var showCredentialsInput by remember { mutableStateOf(false) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .wrapContentHeight()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudSync,
+                            contentDescription = "Cloud Database",
+                            tint = InfoBlue,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Text(
+                            text = "Cloud Database & Sync",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NavyDark
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = SlateMuted)
+                    }
+                }
+
+                HorizontalDivider(color = CardBorder)
+
+                // Status Badge
+                Surface(
+                    color = MarketOpenGreenBg,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(MarketOpenGreen)
+                        )
+                        Column {
+                            Text(
+                                text = "CLOUD DATABASE: CONNECTED",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MarketOpenGreen
+                            )
+                            Text(
+                                text = "Provider: ${cloudStatus.provider}",
+                                fontSize = 11.sp,
+                                color = NavyDark
+                            )
+                        }
+                    }
+                }
+
+                // Info Box
+                Surface(
+                    color = CardBorder.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Multi-Device Synchronization:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NavyDark
+                        )
+                        Text(
+                            text = "• All customer accounts created here are stored permanently in the Cloud Database.\n• Customers can log in from ANY mobile device (Device A, Device B, Device C).\n• Account balances and transactions sync across devices in real time.",
+                            fontSize = 11.sp,
+                            color = SlateMuted,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+
+                // Sync Now Button
+                Button(
+                    onClick = onSyncNow,
+                    colors = ButtonDefaults.buttonColors(containerColor = InfoBlue),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sync All Data Now", fontWeight = FontWeight.SemiBold)
+                }
+
+                // Optional Custom Firebase Config Toggle
+                TextButton(
+                    onClick = { showCredentialsInput = !showCredentialsInput },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (showCredentialsInput) "Hide Firebase Project Config" else "Configure Custom Firebase Project",
+                        fontSize = 12.sp,
+                        color = InfoBlue
+                    )
+                }
+
+                if (showCredentialsInput) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = projectId,
+                            onValueChange = { projectId = it },
+                            label = { Text("Firebase Project ID") },
+                            placeholder = { Text("e.g. mujahid-accounts-prod") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = apiKey,
+                            onValueChange = { apiKey = it },
+                            label = { Text("Firebase Web/Android API Key") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = appId,
+                            onValueChange = { appId = it },
+                            label = { Text("Firebase Application ID (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                if (projectId.isNotBlank() && apiKey.isNotBlank()) {
+                                    onConfigureFirebase(projectId, apiKey, appId.ifBlank { null })
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            enabled = projectId.isNotBlank() && apiKey.isNotBlank()
+                        ) {
+                            Text("Save Firebase Credentials")
+                        }
+                    }
+                }
+
+                // Close Button
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Close", color = NavyDark)
+                }
+            }
+        }
     }
 }

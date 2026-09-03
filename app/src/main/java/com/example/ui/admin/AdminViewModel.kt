@@ -3,6 +3,7 @@ package com.example.ui.admin
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.cloud.CloudStatus
 import com.example.data.repository.MujahidRepository
 import com.example.model.AppNotification
 import com.example.model.BalanceType
@@ -372,6 +373,38 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
             }.onFailure {
                 _statusMessage.value = it.message ?: "Failed to delete transaction"
             }
+        }
+    }
+
+    // ==================== CLOUD DATABASE OPERATIONS ====================
+
+    private val _cloudStatus = MutableStateFlow(repository.getCloudStatus())
+    val cloudStatus: StateFlow<CloudStatus> = _cloudStatus.asStateFlow()
+
+    fun refreshCloudStatus() {
+        _cloudStatus.value = repository.getCloudStatus()
+    }
+
+    fun syncWithCloud() {
+        viewModelScope.launch {
+            _statusMessage.value = "Syncing with Cloud Database..."
+            val result = repository.syncAllWithCloud()
+            result.onSuccess { msg ->
+                _statusMessage.value = msg
+                refreshCloudStatus()
+            }.onFailure { ex ->
+                _statusMessage.value = "Cloud Sync Error: ${ex.message}"
+            }
+        }
+    }
+
+    fun configureFirebaseCloud(projectId: String, apiKey: String, appId: String?) {
+        val success = repository.configureCloudFirebase(projectId, apiKey, appId)
+        if (success) {
+            _statusMessage.value = "Firebase Cloud credentials configured successfully!"
+            refreshCloudStatus()
+        } else {
+            _statusMessage.value = "Failed to configure Firebase credentials. Please verify details."
         }
     }
 }

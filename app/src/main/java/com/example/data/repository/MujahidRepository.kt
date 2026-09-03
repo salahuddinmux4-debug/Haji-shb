@@ -1,6 +1,9 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.util.Log
+import com.example.data.cloud.CloudDatabaseService
+import com.example.data.cloud.CloudStatus
 import com.example.data.local.AdminEntity
 import com.example.data.local.AppDatabase
 import com.example.data.local.CustomerEntity
@@ -38,6 +41,8 @@ class MujahidRepository(private val context: Context) {
     private val notificationDao = database.notificationDao()
     private val adminDao = database.adminDao()
     private val transactionDao = database.transactionDao()
+
+    val cloudDatabase = CloudDatabaseService.getInstance(context)
 
     private val prefs = context.getSharedPreferences("mujahid_repo_prefs", Context.MODE_PRIVATE)
 
@@ -131,21 +136,65 @@ class MujahidRepository(private val context: Context) {
     }
 
     suspend fun authenticateCustomer(username: String, plainPass: String): Result<Customer> = withContext(Dispatchers.IO) {
-        val customerEntity = customerDao.getCustomerByUsername(username.trim().lowercase())
-            ?: return@withContext Result.failure(Exception("Customer username not found"))
+        val cleanUsername = username.trim().lowercase()
+        Log.i("CustomerAuth", "Authenticating customer '$cleanUsername' against Cloud Database...")
 
-        if (!customerEntity.isActive) {
+        // 1. Query Cloud Database first for the customer record
+        var customer = cloudDatabase.findCustomerByUsernameInCloud(cleanUsername).getOrNull()
+
+        // 2. Fallback to local DB if device was offline or during initial migration
+        if (customer == null) {
+            val local = customerDao.getCustomerByUsername(cleanUsername)?.toDomain()
+            if (local != null) {
+                customer = local
+                // Sync to Cloud Database in background so available on all devices
+                launch { cloudDatabase.saveCustomerToCloud(local) }
+            }
+        }
+
+        // 3. If customer record does not exist in Cloud Database or local
+        if (customer == null) {
+            Log.e("CustomerAuth", "LOOKUP FAILURE: Customer account '$cleanUsername' does not exist in Cloud Database.")
+            return@withContext Result.failure(
+                Exception("Customer account '$cleanUsername' not found in Cloud Database. Please verify your credentials or contact Admin.")
+            )
+        }
+
+        // 4. Retrieve permanent authenticated UID
+        val permanentUid = customer.id
+        Log.i("CustomerAuth", "Found customer record in Cloud Database: UID=$permanentUid, Name=${customer.name}")
+
+        // 5. Verify account active status
+        if (!customer.isActive) {
+            Log.w("CustomerAuth", "Login rejected: Account $permanentUid is deactivated by Admin.")
             return@withContext Result.failure(Exception("Your account is deactivated by Admin. Please contact office."))
         }
 
-        if (SecurityUtils.verifyPassword(plainPass, customerEntity.passwordHash)) {
-            Result.success(customerEntity.toDomain())
-        } else {
-            Result.failure(Exception("Invalid password. Please check your credentials."))
+        // 6. Verify password securely
+        if (!SecurityUtils.verifyPassword(plainPass, customer.passwordHash)) {
+            Log.w("CustomerAuth", "Login rejected: Invalid password for customer UID $permanentUid.")
+            return@withContext Result.failure(Exception("Invalid password. Please check your credentials."))
         }
+
+        // 7. Sync latest customer record to local cache for offline availability
+        customerDao.insertCustomer(CustomerEntity.fromDomain(customer))
+
+        // 8. Fetch customer's latest transactions from Cloud Database
+        val cloudTx = cloudDatabase.fetchTransactionsForCustomerFromCloud(permanentUid).getOrNull()
+        if (!cloudTx.isNullOrEmpty()) {
+            transactionDao.insertTransactions(cloudTx.map { TransactionEntity.fromDomain(it) })
+        }
+
+        Log.i("CustomerAuth", "Customer '$cleanUsername' (UID: $permanentUid) successfully authenticated from Cloud Database.")
+        Result.success(customer)
     }
 
     suspend fun getCustomerById(id: String): Customer? = withContext(Dispatchers.IO) {
+        val cloudCustomer = cloudDatabase.findCustomerByIdInCloud(id).getOrNull()
+        if (cloudCustomer != null) {
+            customerDao.insertCustomer(CustomerEntity.fromDomain(cloudCustomer))
+            return@withContext cloudCustomer
+        }
         customerDao.getCustomerById(id)?.toDomain()
     }
 
@@ -391,12 +440,18 @@ class MujahidRepository(private val context: Context) {
         customRatesMap: Map<String, Double> = emptyMap()
     ): Result<Customer> = withContext(Dispatchers.IO) {
         val cleanUsername = username.trim().lowercase()
-        if (customerDao.getCustomerByUsername(cleanUsername) != null) {
+
+        // 1. Verify uniqueness in Cloud Database and local storage
+        val existingInCloud = cloudDatabase.findCustomerByUsernameInCloud(cleanUsername).getOrNull()
+        val existingInLocal = customerDao.getCustomerByUsername(cleanUsername)
+        if (existingInCloud != null || existingInLocal != null) {
             return@withContext Result.failure(Exception("Username '$cleanUsername' already exists. Please choose a unique username."))
         }
 
+        // 2. Generate permanent unique customer ID (UID)
+        val customerUid = "cust_${System.currentTimeMillis()}_${(1000..9999).random()}"
         val newCustomer = Customer(
-            id = "cust_${System.currentTimeMillis()}_${(1000..9999).random()}",
+            id = customerUid,
             name = name.trim(),
             username = cleanUsername,
             passwordHash = SecurityUtils.hashPassword(plainPass),
@@ -413,9 +468,17 @@ class MujahidRepository(private val context: Context) {
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
+
+        // 3. Save permanently to Cloud Database so account is available on any mobile
+        val cloudResult = cloudDatabase.saveCustomerToCloud(newCustomer)
+        if (cloudResult.isFailure) {
+            Log.w("CloudDatabase", "Warning saving customer to cloud: ${cloudResult.exceptionOrNull()?.message}")
+        }
+
+        // 4. Save to local cache for fast offline access
         customerDao.insertCustomer(CustomerEntity.fromDomain(newCustomer))
 
-        // Also create welcome notification for the customer
+        // 5. Also create welcome notification for the customer
         val notif = AppNotification(
             id = UUID.randomUUID().toString(),
             customerId = newCustomer.id,
@@ -431,6 +494,7 @@ class MujahidRepository(private val context: Context) {
 
     suspend fun updateCustomer(customer: Customer, newPlainPassword: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         val existing = customerDao.getCustomerById(customer.id)
+            ?: cloudDatabase.findCustomerByIdInCloud(customer.id).getOrNull()?.let { CustomerEntity.fromDomain(it) }
             ?: return@withContext Result.failure(Exception("Customer not found"))
 
         val finalPasswordHash = if (!newPlainPassword.isNullOrBlank()) {
@@ -443,6 +507,10 @@ class MujahidRepository(private val context: Context) {
             passwordHash = finalPasswordHash,
             updatedAt = System.currentTimeMillis()
         )
+
+        // Save to Cloud Database
+        cloudDatabase.saveCustomerToCloud(updated)
+        // Update local cache
         customerDao.updateCustomer(CustomerEntity.fromDomain(updated))
         Result.success(Unit)
     }
@@ -462,6 +530,7 @@ class MujahidRepository(private val context: Context) {
             updatedAt = System.currentTimeMillis()
         )
         customerDao.updateCustomer(updated)
+        cloudDatabase.saveCustomerToCloud(updated.toDomain())
 
         // Create balance update notification
         val notif = AppNotification(
@@ -483,10 +552,12 @@ class MujahidRepository(private val context: Context) {
         val newStatus = !existing.isActive
         val updated = existing.copy(isActive = newStatus, updatedAt = System.currentTimeMillis())
         customerDao.updateCustomer(updated)
+        cloudDatabase.saveCustomerToCloud(updated.toDomain())
         Result.success(newStatus)
     }
 
     suspend fun deleteCustomer(customerId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        cloudDatabase.deleteCustomerFromCloud(customerId)
         customerDao.deleteCustomerById(customerId)
         transactionDao.deleteTransactionsByCustomerId(customerId)
         notificationDao.deleteNotificationsByCustomerId(customerId)
@@ -626,6 +697,7 @@ class MujahidRepository(private val context: Context) {
 
         // Save transaction
         transactionDao.insertTransaction(TransactionEntity.fromDomain(transaction))
+        cloudDatabase.saveTransactionToCloud(transaction)
 
         // Update customer balance
         val updatedCustomer = customerEntity.copy(
@@ -634,6 +706,7 @@ class MujahidRepository(private val context: Context) {
             updatedAt = System.currentTimeMillis()
         )
         customerDao.updateCustomer(updatedCustomer)
+        cloudDatabase.saveCustomerToCloud(updatedCustomer.toDomain())
 
         // Notify customer
         val notif = AppNotification(
@@ -699,6 +772,7 @@ class MujahidRepository(private val context: Context) {
 
         // Save transaction
         transactionDao.insertTransaction(TransactionEntity.fromDomain(transaction))
+        cloudDatabase.saveTransactionToCloud(transaction)
 
         // Update customer balance
         val updatedCustomer = customerEntity.copy(
@@ -707,6 +781,7 @@ class MujahidRepository(private val context: Context) {
             updatedAt = System.currentTimeMillis()
         )
         customerDao.updateCustomer(updatedCustomer)
+        cloudDatabase.saveCustomerToCloud(updatedCustomer.toDomain())
 
         // Notify customer
         val notif = AppNotification(
@@ -753,5 +828,51 @@ class MujahidRepository(private val context: Context) {
 
         transactionDao.deleteTransactionById(transactionId)
         Result.success(Unit)
+    }
+
+    // ==================== CLOUD DATABASE STATUS & SYNC ====================
+
+    fun getCloudStatus(): CloudStatus = cloudDatabase.getCloudStatus()
+
+    fun configureCloudFirebase(projectId: String, apiKey: String, appId: String?): Boolean {
+        return cloudDatabase.configureFirebaseCredentials(projectId, apiKey, appId)
+    }
+
+    suspend fun syncAllWithCloud(): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            // 1. Push all local active customers to Cloud
+            val localCustomers = customerDao.getAllCustomers()
+            var uploadedCustomers = 0
+            localCustomers.forEach { c ->
+                cloudDatabase.saveCustomerToCloud(c.toDomain())
+                uploadedCustomers++
+            }
+
+            // 2. Fetch all customers from Cloud and merge into local
+            val cloudCustomersResult = cloudDatabase.fetchAllCustomersFromCloud()
+            var downloadedCustomers = 0
+            if (cloudCustomersResult.isSuccess) {
+                val cloudCustomers = cloudCustomersResult.getOrNull().orEmpty()
+                cloudCustomers.forEach { c ->
+                    customerDao.insertCustomer(CustomerEntity.fromDomain(c))
+                    downloadedCustomers++
+                }
+            }
+
+            // 3. Sync market items
+            val activeItems = marketItemDao.getAllActiveItems()
+            cloudDatabase.syncMarketItemsToCloud(activeItems.map { it.toDomain() })
+
+            // 4. Sync transactions
+            val allTxs = transactionDao.getAllTransactions()
+            allTxs.forEach { tx ->
+                cloudDatabase.saveTransactionToCloud(tx.toDomain())
+            }
+
+            Result.success("Cloud Sync Completed: $uploadedCustomers synced, $downloadedCustomers verified.")
+        } catch (e: Exception) {
+            Log.e("MujahidRepo", "Cloud sync failed: ${e.message}", e)
+            Result.failure(e)
+        }
     }
 }
