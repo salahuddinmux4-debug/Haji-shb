@@ -146,7 +146,7 @@ fun AddCustomerDialog(
                         value = username,
                         onValueChange = { username = it; errorMessage = null },
                         label = { Text("Login Username *") },
-                        placeholder = { Text("e.g. abdul_hameed") },
+                        placeholder = { Text("e.g. customer_username") },
                         colors = appTextFieldColors(),
                         modifier = Modifier.fillMaxWidth().testTag("input_customer_username"),
                         shape = RoundedCornerShape(10.dp),

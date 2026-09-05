@@ -100,14 +100,26 @@ class MultiDeviceCustomerAuthTest {
     }
 
     @Test
-    fun testCustomerKhalidAuthentication() = runBlocking {
+    fun testCustomerAuthentication() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val repo = com.example.data.repository.MujahidRepository(context)
 
-        val result = repo.authenticateCustomer("khalid", "123456")
-        assertTrue("Customer khalid should authenticate successfully: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        val testUsername = "active_trader_${System.currentTimeMillis()}"
+        val testPassword = "traderPass123"
+        val addResult = repo.addCustomer(
+            name = "Active Trader",
+            username = testUsername,
+            plainPass = testPassword,
+            phone = "03001234567",
+            balance = 10000.0,
+            balanceType = BalanceType.RECEIVABLE
+        )
+        assertTrue("Customer creation must succeed", addResult.isSuccess)
+
+        val result = repo.authenticateCustomer(testUsername, testPassword)
+        assertTrue("Customer should authenticate successfully: ${result.exceptionOrNull()?.message}", result.isSuccess)
         val customer = result.getOrNull()
         assertNotNull(customer)
-        assertEquals("khalid", customer?.username?.lowercase()?.trim())
+        assertEquals(testUsername, customer?.username?.lowercase()?.trim())
     }
 }

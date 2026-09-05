@@ -270,8 +270,6 @@ fun AuthScreen(
                                         Button(
                                             onClick = {
                                                 authViewModel.setTab(UserRole.ADMIN)
-                                                username = "admin"
-                                                password = "admin123"
                                                 authViewModel.clearError()
                                             },
                                             shape = RoundedCornerShape(8.dp),
@@ -281,72 +279,8 @@ fun AuthScreen(
                                         ) {
                                             Text("Switch to Admin Portal", fontSize = 12.sp, color = Color.White)
                                         }
-                                    } else if (errorMsg.contains("not found")) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Button(
-                                            onClick = {
-                                                username = "khalid"
-                                                password = "123456"
-                                                authViewModel.clearError()
-                                            },
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = NavyDark),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                            modifier = Modifier.padding(top = 6.dp)
-                                        ) {
-                                            Text("Fill 'khalid' (Pass: 123456)", fontSize = 12.sp, color = Color.White)
-                                        }
                                     }
                                 }
-                            }
-                        }
-
-                        // Quick Fill Chips
-                        Text(
-                            text = if (selectedTab == UserRole.CUSTOMER) "Quick Demo Login (Tap to fill):" else "Admin Demo Login (Tap to fill):",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (selectedTab == UserRole.CUSTOMER) {
-                                SuggestionChip(
-                                    onClick = {
-                                        username = "khalid"
-                                        password = "123456"
-                                        authViewModel.clearError()
-                                    },
-                                    label = { Text("Khalid (123456)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                    icon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp)) },
-                                    modifier = Modifier.testTag("chip_fill_khalid")
-                                )
-                                SuggestionChip(
-                                    onClick = {
-                                        username = "abdul_hameed"
-                                        password = "123456"
-                                        authViewModel.clearError()
-                                    },
-                                    label = { Text("Abdul Hameed", fontSize = 11.sp) },
-                                    icon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp)) },
-                                    modifier = Modifier.testTag("chip_fill_abdul")
-                                )
-                            } else {
-                                SuggestionChip(
-                                    onClick = {
-                                        username = "admin"
-                                        password = "admin123"
-                                        authViewModel.clearError()
-                                    },
-                                    label = { Text("Admin (admin123)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                    icon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(14.dp)) },
-                                    modifier = Modifier.testTag("chip_fill_admin")
-                                )
                             }
                         }
 
@@ -358,7 +292,7 @@ fun AuthScreen(
                                 authViewModel.clearError()
                             },
                             label = { Text(if (selectedTab == UserRole.CUSTOMER) "Customer Username" else "Admin Username") },
-                            placeholder = { Text(if (selectedTab == UserRole.CUSTOMER) "e.g. khalid or 0300-1234567" else "admin") },
+                            placeholder = { Text(if (selectedTab == UserRole.CUSTOMER) "e.g. username or phone" else "admin") },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Person,

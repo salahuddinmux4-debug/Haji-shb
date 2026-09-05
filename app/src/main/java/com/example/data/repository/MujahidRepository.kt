@@ -78,7 +78,10 @@ class MujahidRepository(private val context: Context) {
             marketItemDao.insertItems(defaultItems.map { MarketItemEntity.fromDomain(it) })
         }
 
-        }
+        // Clean up legacy demo customers if present locally
+        customerDao.deleteCustomerById("cust_khalid_default")
+        customerDao.deleteCustomerById("cust_abdul_default")
+        customerDao.deleteCustomerById("cust_mujahid_default")
 
         // Seed Initial Market Rates if not present
         if (marketRatesDao.getCurrentRates() == null) {
@@ -162,30 +165,29 @@ class MujahidRepository(private val context: Context) {
             }
         }
 
-        
-        // 4. If customer record does not exist in Cloud Database or local
+        // 3. If customer record does not exist in Cloud Database or local
         if (customer == null) {
-            Log.e("CustomerAuth", "LOOKUP FAILURE: Customer account '$cleanUsername' does not exist in Cloud Database.")
+            Log.e("CustomerAuth", "LOOKUP FAILURE: Customer account '$cleanUsername' does not exist in Cloud Database or local cache.")
             return@withContext Result.failure(
-                Exception("Customer account '$cleanUsername' not found. Available login: 'khalid' (password: 123456) or tap Quick Fill.")
+                Exception("Customer account '$cleanUsername' not found. Please verify your username or contact the admin.")
             )
         }
 
-        // 5. Retrieve permanent authenticated UID
+        // 4. Retrieve permanent authenticated UID
         val permanentUid = customer.id
-        Log.i("CustomerAuth", "Found customer record in Cloud Database: UID=$permanentUid, Name=${customer.name}")
+        Log.i("CustomerAuth", "Found customer record: UID=$permanentUid, Name=${customer.name}")
 
-        // 6. Verify account active status
+        // 5. Verify account active status
         if (!customer.isActive) {
             Log.w("CustomerAuth", "Login rejected: Account $permanentUid is deactivated by Admin.")
             return@withContext Result.failure(Exception("Your account is deactivated by Admin. Please contact office."))
         }
 
-        // 7. Verify password securely
-val isPasswordCorrect =
-    SecurityUtils.verifyPassword(plainPass, customer.passwordHash)
-if (!isPasswordCorrect) {
-return@withContext Result.failure(Exception("Invalid password. Please check your credentials."))
+        // 6. Verify password securely
+        val isPasswordCorrect = SecurityUtils.verifyPassword(plainPass, customer.passwordHash)
+        if (!isPasswordCorrect) {
+            Log.w("CustomerAuth", "Login rejected: Invalid password for customer UID $permanentUid.")
+            return@withContext Result.failure(Exception("Invalid password. Please check your credentials."))
         }
 
         // 7. Sync latest customer record to local cache for offline availability
